@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Sessions Management</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .qr-code {
+            max-width: 200px;
+            max-height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WhatsApp Sessions Management</h1>
+    <table id="sessionsTable">
+        <thead>
+            <tr>
+                <th>Session ID</th>
+                <th>Status</th>
+                <th>API Key</th>
+                <th>Webhook</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="sessionsBody"></tbody>
+    </table>
+    <button onclick="createNewSession()">Create New Session</button>
+
+    <script src="sessions.js"></script>
+</body>
+</html>

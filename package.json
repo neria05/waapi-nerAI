@@ -1,0 +1,22 @@
+{
+    "name": "waapi-ner",
+    "version": "1.0.0",
+    "description": "WhatsApp API with multi-session support",
+    "main": "app.js",
+    "scripts": {
+      "start": "node app.js"
+    },
+    "dependencies": {
+      "@hapi/boom": "^10.0.1",
+      "@whiskeysockets/baileys": "^6.7.5",
+      "axios": "^1.7.2",
+      "express": "^4.19.2",
+      "mime-types": "^2.1.35",
+      "open": "^10.1.0",
+      "pino": "^9.2.0",
+      "qrcode": "^1.5.3",
+      "qrcode-terminal": "^0.12.0",
+      "qs": "^6.12.1",
+      "dotenv": "^16.4.5"
+    }
+  }
