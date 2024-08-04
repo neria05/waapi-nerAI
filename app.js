@@ -1,3 +1,4 @@
+require('dotenv').config(); // הוספת שורת קוד זו לייבוא משתני הסביבה
 const express = require("express");
 const {
   makeWASocket,
@@ -9,12 +10,20 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const basicAuth = require('express-basic-auth'); // ייבוא הספרייה לאימות בסיסי
 
 const app = express();
 const port = 3000;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+
+// הוספת אימות בסיסי
+app.use(basicAuth({
+  users: { [process.env.USERNAME]: process.env.PASSWORD },
+  challenge: true,
+  unauthorizedResponse: 'Unauthorized'
+}));
 
 let sessions = {};
 

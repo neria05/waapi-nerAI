@@ -12,10 +12,10 @@ function loadSessions() {
                         <td>${session.apiKey}</td>
                         <td>${session.webhook}</td>
                         <td>
-                            <button onclick="deleteSession('${session.sessionId}')">Delete</button>
-                            <button onclick="reconnectSession('${session.sessionId}')">Reconnect</button>
-                            <button onclick="updateWebhook('${session.sessionId}')">Update Webhook</button>
-                            <button onclick="getQR('${session.sessionId}')">Get QR</button>
+                            <button class="button" onclick="deleteSession('${session.sessionId}')">Delete</button>
+                            <button class="button" onclick="reconnectSession('${session.sessionId}')">Reconnect</button>
+                            <button class="button" onclick="updateWebhook('${session.sessionId}')">Update Webhook</button>
+                            <button class="button" onclick="getQR('${session.sessionId}')">Get QR</button>
                         </td>
                     </tr>
                 `;
