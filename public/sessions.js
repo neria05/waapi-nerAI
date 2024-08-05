@@ -48,13 +48,19 @@ function createNewSession() {
 function deleteSession(sessionId) {
     if (confirm(`Are you sure you want to delete session ${sessionId}?`)) {
         fetch(`/delapi/${sessionId}`, { method: 'DELETE' })
-            .then(() => {
-                alert(`Session ${sessionId} deleted`);
-                loadSessions();
+            .then(response => {
+                if (response.ok) {
+                    alert(`Session ${sessionId} deleted`);
+                    loadSessions(); // רענון הרשימה לאחר מחיקה
+                } else {
+                    response.text().then(text => {
+                        alert(`Failed to delete session: ${text}`);
+                    });
+                }
             })
             .catch(error => {
                 console.error('Error deleting session:', error);
-                alert('Failed to delete session. Please try again.');
+                document.getElementById('errorMessage').innerText = 'Failed to delete session. Please try again.';
             });
     }
 }

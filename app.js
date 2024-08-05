@@ -248,12 +248,14 @@ app.delete("/delapi/:sessionId", (req, res) => {
   // מחיקת מפתח ה-API
   delete apiKeys[sessionId];
   saveApiKeys();
+  console.log(`API key deleted for session ${sessionId}`);
 
   // מחיקת הסשן עצמו
   if (sessions[sessionId]) {
     // סגירת החיבור
     sessions[sessionId].sock.end();
     delete sessions[sessionId];
+    console.log(`Session ${sessionId} deleted from memory`);
   }
 
   // מחיקת קבצי האימות והחיבור
@@ -263,7 +265,7 @@ app.delete("/delapi/:sessionId", (req, res) => {
       console.error(`Error deleting session files for ${sessionId}:`, err);
       return res.status(500).send(`Failed to delete session files for ${sessionId}`);
     }
-
+    console.log(`Session files deleted for ${sessionId}`);
     res.status(200).send(`API key and session deleted for ${sessionId}`);
   });
 });
