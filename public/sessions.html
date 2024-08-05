@@ -11,7 +11,7 @@
             margin: 0;
             padding: 20px;
         }
-        h1 {
+        h1, h2 {
             text-align: center;
             color: #333;
         }
@@ -55,10 +55,28 @@
         .button:hover {
             background-color: #45a049;
         }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .api-doc {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+        }
+        .api-doc pre {
+            background-color: #f4f4f9;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
     </style>
 </head>
 <body>
     <h1>WhatsApp Sessions Management</h1>
+    <div id="errorMessage" class="error"></div>
     <table id="sessionsTable">
         <thead>
             <tr>
@@ -72,6 +90,41 @@
         <tbody id="sessionsBody"></tbody>
     </table>
     <button class="button" onclick="createNewSession()">Create New Session</button>
+
+    <h2>API Documentation</h2>
+    <div class="api-doc">
+        <h3>Send a Message</h3>
+        <p><strong>Endpoint:</strong> <code>POST /message/:sessionId</code></p>
+        <p><strong>Headers:</strong></p>
+        <pre>{
+    "x-api-key": "your_api_key"
+}</pre>
+        <p><strong>Body:</strong></p>
+        <pre>{
+    "id": "recipient_id",
+    "text": "message_text"
+}</pre>
+
+        <h3>Check if a Number Exists on WhatsApp</h3>
+        <p><strong>Endpoint:</strong> <code>GET /checkno/:sessionId/:phone</code></p>
+        <p><strong>Headers:</strong></p>
+        <pre>{
+    "x-api-key": "your_api_key"
+}</pre>
+
+        <h3>Send an Image</h3>
+        <p><strong>Endpoint:</strong> <code>POST /sendimage/:sessionId</code></p>
+        <p><strong>Headers:</strong></p>
+        <pre>{
+    "x-api-key": "your_api_key"
+}</pre>
+        <p><strong>Body:</strong></p>
+        <pre>{
+    "id": "recipient_id",
+    "url": "image_url",
+    "caption": "optional_caption"
+}</pre>
+    </div>
 
     <script src="sessions.js"></script>
 </body>
