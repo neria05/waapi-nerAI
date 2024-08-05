@@ -238,15 +238,34 @@ app.post("/genapi/:sessionId", async (req, res) => {
   res.status(200).send({ sessionId, apiKey });
 });
 
-// Endpoint to delete the API key for a specific session ID
+// Endpoint to delete the API key and session for a specific session ID
 app.delete("/delapi/:sessionId", (req, res) => {
   const { sessionId } = req.params;
   if (!apiKeys[sessionId]) {
     return res.status(404).send(`API key not found for session ${sessionId}`);
   }
+
+  // מחיקת מפתח ה-API
   delete apiKeys[sessionId];
   saveApiKeys();
-  res.status(200).send(`API key deleted for session ${sessionId}`);
+
+  // מחיקת הסשן עצמו
+  if (sessions[sessionId]) {
+    // סגירת החיבור
+    sessions[sessionId].sock.end();
+    delete sessions[sessionId];
+  }
+
+  // מחיקת קבצי האימות והחיבור
+  const sessionFilePath = path.join(__dirname, "sessions", sessionId);
+  fs.rm(sessionFilePath, { recursive: true, force: true }, (err) => {
+    if (err) {
+      console.error(`Error deleting session files for ${sessionId}:`, err);
+      return res.status(500).send(`Failed to delete session files for ${sessionId}`);
+    }
+
+    res.status(200).send(`API key and session deleted for ${sessionId}`);
+  });
 });
 
 // Endpoint to get QR code for a specific session
