@@ -241,7 +241,10 @@ app.post("/genapi/:sessionId", async (req, res) => {
 // Endpoint to delete the API key and session for a specific session ID
 app.delete("/delapi/:sessionId", (req, res) => {
   const { sessionId } = req.params;
+  console.log(`Received request to delete session ${sessionId}`);
+
   if (!apiKeys[sessionId]) {
+    console.log(`API key not found for session ${sessionId}`);
     return res.status(404).send(`API key not found for session ${sessionId}`);
   }
 
@@ -265,6 +268,7 @@ app.delete("/delapi/:sessionId", (req, res) => {
       console.error(`Error deleting session files for ${sessionId}:`, err);
       return res.status(500).send(`Failed to delete session files for ${sessionId}`);
     }
+
     console.log(`Session files deleted for ${sessionId}`);
     res.status(200).send(`API key and session deleted for ${sessionId}`);
   });
