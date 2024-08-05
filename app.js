@@ -1,3 +1,4 @@
+require('dotenv').config(); // הוספת שורת קוד זו לייבוא משתני הסביבה
 const express = require("express");
 const {
   makeWASocket,
@@ -9,12 +10,20 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const basicAuth = require('express-basic-auth'); // ייבוא הספרייה לאימות בסיסי
 
 const app = express();
 const port = 3000;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+
+// הוספת אימות בסיסי
+app.use(basicAuth({
+  users: { [process.env.USERNAME]: process.env.PASSWORD },
+  challenge: true,
+  unauthorizedResponse: 'Unauthorized'
+}));
 
 let sessions = {};
 
@@ -229,15 +238,40 @@ app.post("/genapi/:sessionId", async (req, res) => {
   res.status(200).send({ sessionId, apiKey });
 });
 
-// Endpoint to delete the API key for a specific session ID
+// Endpoint to delete the API key and session for a specific session ID
 app.delete("/delapi/:sessionId", (req, res) => {
   const { sessionId } = req.params;
+  console.log(`Received request to delete session ${sessionId}`);
+
   if (!apiKeys[sessionId]) {
+    console.log(`API key not found for session ${sessionId}`);
     return res.status(404).send(`API key not found for session ${sessionId}`);
   }
+
+  // מחיקת מפתח ה-API
   delete apiKeys[sessionId];
   saveApiKeys();
-  res.status(200).send(`API key deleted for session ${sessionId}`);
+  console.log(`API key deleted for session ${sessionId}`);
+
+  // מחיקת הסשן עצמו
+  if (sessions[sessionId]) {
+    // סגירת החיבור
+    sessions[sessionId].sock.end();
+    delete sessions[sessionId];
+    console.log(`Session ${sessionId} deleted from memory`);
+  }
+
+  // מחיקת קבצי האימות והחיבור
+  const sessionFilePath = path.join(__dirname, "sessions", sessionId);
+  fs.rm(sessionFilePath, { recursive: true, force: true }, (err) => {
+    if (err) {
+      console.error(`Error deleting session files for ${sessionId}:`, err);
+      return res.status(500).send(`Failed to delete session files for ${sessionId}`);
+    }
+
+    console.log(`Session files deleted for ${sessionId}`);
+    res.status(200).send(`API key and session deleted for ${sessionId}`);
+  });
 });
 
 // Endpoint to get QR code for a specific session

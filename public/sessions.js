@@ -12,10 +12,10 @@ function loadSessions() {
                         <td>${session.apiKey}</td>
                         <td>${session.webhook}</td>
                         <td>
-                            <button onclick="deleteSession('${session.sessionId}')">Delete</button>
-                            <button onclick="reconnectSession('${session.sessionId}')">Reconnect</button>
-                            <button onclick="updateWebhook('${session.sessionId}')">Update Webhook</button>
-                            <button onclick="getQR('${session.sessionId}')">Get QR</button>
+                            <button class="button" onclick="deleteSession('${session.sessionId}')">Delete</button>
+                            <button class="button" onclick="reconnectSession('${session.sessionId}')">Reconnect</button>
+                            <button class="button" onclick="updateWebhook('${session.sessionId}')">Update Webhook</button>
+                            <button class="button" onclick="getQR('${session.sessionId}')">Get QR</button>
                         </td>
                     </tr>
                 `;
@@ -48,13 +48,19 @@ function createNewSession() {
 function deleteSession(sessionId) {
     if (confirm(`Are you sure you want to delete session ${sessionId}?`)) {
         fetch(`/delapi/${sessionId}`, { method: 'DELETE' })
-            .then(() => {
-                alert(`Session ${sessionId} deleted`);
-                loadSessions();
+            .then(response => {
+                if (response.ok) {
+                    alert(`Session ${sessionId} deleted`);
+                    loadSessions(); // רענון הרשימה לאחר מחיקה
+                } else {
+                    response.text().then(text => {
+                        alert(`Failed to delete session: ${text}`);
+                    });
+                }
             })
             .catch(error => {
                 console.error('Error deleting session:', error);
-                alert('Failed to delete session. Please try again.');
+                document.getElementById('errorMessage').innerText = 'Failed to delete session. Please try again.';
             });
     }
 }

@@ -11,6 +11,7 @@
       "@whiskeysockets/baileys": "^6.7.5",
       "axios": "^1.7.2",
       "express": "^4.19.2",
+      "express-basic-auth":"^1.2.1",
       "mime-types": "^2.1.35",
       "open": "^10.1.0",
       "pino": "^9.2.0",
