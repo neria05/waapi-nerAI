@@ -382,7 +382,7 @@ app.post('/sendimage/:sessionId', checkApiKey, async (req, res) => {
 
 
 // Serve the sessions management page
-app.get("/manage", (req, res) => {
+app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "sessions.html"));
 });
 
