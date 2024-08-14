@@ -1,4 +1,3 @@
-require('dotenv').config();
 const express = require("express");
 const {
   makeWASocket,
@@ -10,20 +9,12 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const basicAuth = require('express-basic-auth');
 
 const app = express();
 const port = 3000;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
-
-// Basic authentication for the sessions page
-app.use('/sessions.html', basicAuth({
-  users: { [process.env.USERNAME]: process.env.PASSWORD },
-  challenge: true,
-  unauthorizedResponse: (req) => 'Unauthorized'
-}));
 
 let sessions = {};
 
@@ -180,19 +171,8 @@ const restoreSessions = async () => {
 
 restoreSessions();
 
-// Middleware to check Admin API key
-const checkAdminApiKey = (req, res, next) => {
-  const apiKey = req.headers['x-admin-api-key'];
-
-  if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
-    return res.status(403).send('Forbidden: Invalid Admin API Key');
-  }
-
-  next();
-};
-
 // Endpoint to get all sessions
-app.get("/sessions", checkAdminApiKey, (req, res) => {
+app.get("/sessions", (req, res) => {
   const sessionList = Object.keys(sessions).map((sessionId) => ({
     sessionId,
     status:
@@ -208,7 +188,7 @@ app.get("/sessions", checkAdminApiKey, (req, res) => {
 });
 
 // Endpoint to start the socket for a given session ID
-app.get("/start/:sessionId", checkAdminApiKey, async (req, res) => {
+app.get("/start/:sessionId", async (req, res) => {
   const { sessionId } = req.params;
   try {
     await startSock(sessionId);
@@ -220,7 +200,7 @@ app.get("/start/:sessionId", checkAdminApiKey, async (req, res) => {
 });
 
 // Endpoint to set the webhook URL for a specific session ID
-app.post("/set-webhook/:sessionId", checkAdminApiKey, (req, res) => {
+app.post("/set-webhook/:sessionId", (req, res) => {
   const { sessionId } = req.params;
   const { webhookUrl } = req.body;
 
@@ -235,7 +215,7 @@ app.post("/set-webhook/:sessionId", checkAdminApiKey, (req, res) => {
 });
 
 // Endpoint to generate a new API key for a specific session ID
-app.post("/genapi/:sessionId", checkAdminApiKey, async (req, res) => {
+app.post("/genapi/:sessionId", async (req, res) => {
   const { sessionId } = req.params;
   const apiKey = crypto.randomBytes(32).toString("hex");
   apiKeys[sessionId] = apiKey;
@@ -250,7 +230,7 @@ app.post("/genapi/:sessionId", checkAdminApiKey, async (req, res) => {
 });
 
 // Endpoint to delete the API key for a specific session ID
-app.delete("/delapi/:sessionId", checkAdminApiKey, (req, res) => {
+app.delete("/delapi/:sessionId", (req, res) => {
   const { sessionId } = req.params;
   if (!apiKeys[sessionId]) {
     return res.status(404).send(`API key not found for session ${sessionId}`);
@@ -261,7 +241,7 @@ app.delete("/delapi/:sessionId", checkAdminApiKey, (req, res) => {
 });
 
 // Endpoint to get QR code for a specific session
-app.get("/qr/:sessionId", checkAdminApiKey, (req, res) => {
+app.get("/qr/:sessionId", (req, res) => {
   const { sessionId } = req.params;
   const session = sessions[sessionId];
   if (session && session.qrCodeUrl) {
@@ -275,104 +255,107 @@ app.get("/qr/:sessionId", checkAdminApiKey, (req, res) => {
   }
 });
 
-// Middleware to check API key for session-specific actions
+// api endpoints for sessions
+// Middleware to check API key
 const checkApiKey = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'];
-  const { sessionId } = req.params;
+    const apiKey = req.headers['x-api-key'];
+    const { sessionId } = req.params;
 
-  if (!apiKey) {
-    return res.status(403).send('API key is required');
-  }
-  if (!sessionId) {
-    return res.status(403).send('Session ID is required');
-  }
-  if (apiKeys[sessionId] !== apiKey) {
-    return res.status(403).send(`Invalid API key for session ${sessionId}`);
-  }
+    if (!apiKey) {
+        return res.status(403).send('API key is required');
+    }
+    if (!sessionId) {
+        return res.status(403).send('Session ID is required');
+    }
+    if (apiKeys[sessionId] !== apiKey) {
+        return res.status(403).send(`Invalid API key for session ${sessionId}`);
+    }
 
-  next();
+    next();
 };
 
 // Endpoint to send a message
 app.post('/message/:sessionId', checkApiKey, async (req, res) => {
-  const { sessionId } = req.params;
-  const { id, text } = req.body;
+    const { sessionId } = req.params;
+    const { id, text } = req.body;
 
-  if (!id || !text) {
-    return res.status(400).send('Missing id or text in request body');
-  }
+    if (!id || !text) {
+        return res.status(400).send('Missing id or text in request body');
+    }
 
-  const session = sessions[sessionId];
-  if (!session || !session.sock) {
-    return res.status(404).send(`Session ${sessionId} not found or not connected`);
-  }
+    const session = sessions[sessionId];
+    if (!session || !session.sock) {
+        return res.status(404).send(`Session ${sessionId} not found or not connected`);
+    }
 
-  try {
-    await session.sock.sendMessage(id, { text });
-    res.status(200).send('Message sent successfully');
-  } catch (error) {
-    console.error(`Error sending message for session ${sessionId}:`, error);
-    res.status(500).send('Failed to send message');
-  }
+    try {
+        await session.sock.sendMessage(id, { text });
+        res.status(200).send('Message sent successfully');
+    } catch (error) {
+        console.error(`Error sending message for session ${sessionId}:`, error);
+        res.status(500).send('Failed to send message');
+    }
 });
 
 // Endpoint to check if a number exists on WhatsApp
 app.get('/checkno/:sessionId/:phone', checkApiKey, async (req, res) => {
-  const { sessionId, phone } = req.params;
+    const { sessionId, phone } = req.params;
 
-  const session = sessions[sessionId];
-  if (!session || !session.sock) {
-    return res.status(404).send(`Session ${sessionId} not found or not connected`);
-  }
-
-  try {
-    const [result] = await session.sock.onWhatsApp(phone);
-    if (result.exists) {
-      res.status(200).json({ exists: true, jid: result.jid });
-    } else {
-      res.status(200).json({ exists: false });
+    const session = sessions[sessionId];
+    if (!session || !session.sock) {
+        return res.status(404).send(`Session ${sessionId} not found or not connected`);
     }
-  } catch (error) {
-    console.error(`Error checking number for session ${sessionId}:`, error);
-    res.status(500).send('Failed to check number');
-  }
+
+    try {
+        const [result] = await session.sock.onWhatsApp(phone);
+        if (result.exists) {
+            res.status(200).json({ exists: true, jid: result.jid });
+        } else {
+            res.status(200).json({ exists: false });
+        }
+    } catch (error) {
+        console.error(`Error checking number for session ${sessionId}:`, error);
+        res.status(500).send('Failed to check number');
+    }
 });
 
 // Endpoint to send an image
 app.post('/sendimage/:sessionId', checkApiKey, async (req, res) => {
-  const { sessionId } = req.params;
-  const { id, url, caption } = req.body;
+    const { sessionId } = req.params;
+    const { id, url, caption } = req.body;
 
-  if (!id || !url) {
-    return res.status(400).send('Missing id or url in request body');
-  }
+    if (!id || !url) {
+        return res.status(400).send('Missing id or url in request body');
+    }
 
-  const session = sessions[sessionId];
-  if (!session || !session.sock) {
-    return res.status(404).send(`Session ${sessionId} not found or not connected`);
-  }
+    const session = sessions[sessionId];
+    if (!session || !session.sock) {
+        return res.status(404).send(`Session ${sessionId} not found or not connected`);
+    }
 
-  try {
-    await session.sock.sendMessage(id, { 
-      image: { url: url },
-      caption: caption || ''
-    });
-    res.status(200).send('Image sent successfully');
-  } catch (error) {
-    console.error(`Error sending image for session ${sessionId}:`, error);
-    res.status(500).send('Failed to send image');
-  }
+    try {
+        await session.sock.sendMessage(id, { 
+            image: { url: url },
+            caption: caption || ''
+        });
+        res.status(200).send('Image sent successfully');
+    } catch (error) {
+        console.error(`Error sending image for session ${sessionId}:`, error);
+        res.status(500).send('Failed to send image');
+    }
+});
+// end API endpoints for sessions
+
+
+// Serve the sessions management page
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "sessions.html"));
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send("Something broke!");
-});
-
-// Serve the sessions management page
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "sessions.html"));
 });
 
 // Start the Express server
