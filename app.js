@@ -19,13 +19,11 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // Basic authentication for the sessions page
-app.get("/", basicAuth({
+app.use('/sessions.html', basicAuth({
   users: { [process.env.USERNAME]: process.env.PASSWORD },
   challenge: true,
   unauthorizedResponse: (req) => 'Unauthorized'
-}), (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "sessions.html"));
-});
+}));
 
 let sessions = {};
 
@@ -370,6 +368,11 @@ app.post('/sendimage/:sessionId', checkApiKey, async (req, res) => {
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send("Something broke!");
+});
+
+// Serve the sessions management page
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "sessions.html"));
 });
 
 // Start the Express server
