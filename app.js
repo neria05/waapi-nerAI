@@ -59,25 +59,27 @@ const startSock = async (sessionId) => {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (update) => {
-        console.log(`Connection update for session ${sessionId}:`, update);
-        const { connection, qr, lastDisconnect } = update;
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut);
-            console.log(`Connection closed for session ${sessionId}. Reconnecting: ${shouldReconnect}`);
-            if (shouldReconnect) {
-                startSock(sessionId);
-            }
-        } else if (connection === 'open') {
-            console.log(`Connection opened for session ${sessionId}`);
-            const userJid = sock.user.id;
-            sessionIdToPhone[sessionId] = userJid;
-            sock.sendMessage(userJid, { text: `המספר ${userJid} חובר בהצלחה, מזהה הסשן: ${sessionId}, מפתח ה-API: ${apiKeys[sessionId]}` });
-        } else if (qr) {
-            console.log(`QR code generated for session ${sessionId}`);
-            const qrCodeUrl = await QRCode.toDataURL(qr);
-            sessions[sessionId].qrCodeUrl = qrCodeUrl;
-        }
-    });
+      console.log(`Connection update for session ${sessionId}:`, update);
+      const { connection, qr, lastDisconnect } = update;
+      if (connection === 'close') {
+          const shouldReconnect = (lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut);
+          console.log(`Connection closed for session ${sessionId}. Reconnecting: ${shouldReconnect}`);
+          if (shouldReconnect) {
+              startSock(sessionId);
+          }
+      } else if (connection === 'open') {
+          console.log(`Connection opened for session ${sessionId}`);
+          const userJid = sock.user.id;
+          const userPhone = userJid.split('@')[0]; // Extract phone number
+          sessionIdToPhone[sessionId] = userPhone;
+          const successMessage = `*המספר ${userPhone} חובר בהצלחה!*\nמזהה: ${sessionId}\nמפתח API: ${apiKeys[sessionId]} `;
+          await sock.sendMessage(userJid, { text: successMessage });
+      } else if (qr) {
+          console.log(`QR code generated for session ${sessionId}`);
+          const qrCodeUrl = await QRCode.toDataURL(qr);
+          sessions[sessionId].qrCodeUrl = qrCodeUrl;
+      }
+  });
 
     sock.ev.on('messages.upsert', async (upsert) => {
         console.log('Received new message:', upsert);

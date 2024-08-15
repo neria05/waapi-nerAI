@@ -9,8 +9,8 @@ function loadSessions() {
                 const row = `
                     <tr>
                         <td>${session.sessionId}</td>
-                        <td>${session.phone}</td> <!-- Display connected phone number -->
-                        <td style="color:${statusColor}">${session.status}</td> <!-- Status color -->
+                        <td>${session.phone}</td> <!-- מציג את המספר -->
+                        <td style="color:${statusColor}">${session.status}</td> <!-- סטטוס בצבע המתאים -->
                         <td>${session.apiKey}</td>
                         <td>${session.webhook}</td>
                         <td>
