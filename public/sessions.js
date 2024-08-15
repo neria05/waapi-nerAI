@@ -5,10 +5,12 @@ function loadSessions() {
             const tbody = document.getElementById('sessionsBody');
             tbody.innerHTML = '';
             sessions.forEach(session => {
+                const statusColor = session.status === "RUNNING" ? "green" : "red";
                 const row = `
                     <tr>
                         <td>${session.sessionId}</td>
-                        <td>${session.status}</td>
+                        <td>${session.phone}</td> <!-- Display connected phone number -->
+                        <td style="color:${statusColor}">${session.status}</td> <!-- Status color -->
                         <td>${session.apiKey}</td>
                         <td>${session.webhook}</td>
                         <td>
@@ -51,7 +53,7 @@ function deleteSession(sessionId) {
             .then(response => {
                 if (response.ok) {
                     alert(`Session ${sessionId} deleted`);
-                    loadSessions(); // רענון הרשימה לאחר מחיקה
+                    loadSessions();
                 } else {
                     response.text().then(text => {
                         alert(`Failed to delete session: ${text}`);

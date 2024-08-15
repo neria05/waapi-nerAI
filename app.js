@@ -17,6 +17,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 let sessions = {};
+let sessionIdToPhone = {}; // New map to store sessionId to phone number
 
 // Load API keys from a file (if it exists)
 const apiKeysFilePath = path.join(__dirname, "api_keys.json");
@@ -53,7 +54,7 @@ const startSock = async (sessionId) => {
         printQRInTerminal: false
     });
 
-    const messageCache = new Set(); // Cache to store recently processed messages
+    const messageCache = new Set();
 
     sock.ev.on('creds.update', saveCreds);
 
@@ -69,7 +70,8 @@ const startSock = async (sessionId) => {
         } else if (connection === 'open') {
             console.log(`Connection opened for session ${sessionId}`);
             const userJid = sock.user.id;
-            sock.sendMessage(userJid, { text: "המספר חובר בהצלחה" });
+            sessionIdToPhone[sessionId] = userJid;
+            sock.sendMessage(userJid, { text: `המספר ${userJid} חובר בהצלחה, מזהה הסשן: ${sessionId}, מפתח ה-API: ${apiKeys[sessionId]}` });
         } else if (qr) {
             console.log(`QR code generated for session ${sessionId}`);
             const qrCodeUrl = await QRCode.toDataURL(qr);
@@ -111,7 +113,6 @@ const startSock = async (sessionId) => {
         const webhookUrl = webhooks[sessionId];
         if (webhookUrl) {
             try {
-                // Prepare webhook payload
                 const webhookPayload = {
                     sessionId,
                     senderNumber,
@@ -122,7 +123,6 @@ const startSock = async (sessionId) => {
                     isGroup: chatId.endsWith('@g.us'),
                     fromMe,
                     type,
-                    // Add more fields as needed
                 };
 
                 console.log('Sending webhook payload:', webhookPayload);
@@ -140,7 +140,6 @@ const startSock = async (sessionId) => {
                 }
             } catch (error) {
                 console.error('Error sending webhook:', error.response ? error.response.data : error.message);
-                // You might want to implement a retry mechanism or queue here
             }
         } else {
             console.log(`No webhook URL configured for session ${sessionId}`);
@@ -175,8 +174,11 @@ restoreSessions();
 app.get("/sessions", (req, res) => {
   const sessionList = Object.keys(sessions).map((sessionId) => ({
     sessionId,
+    phone: sessionIdToPhone[sessionId] || "לא מחובר",
     status:
-      sessions[sessionId] && sessions[sessionId].sock ? "RUNNING" : "STOPPED",
+      sessions[sessionId] && sessions[sessionId].sock
+        ? (sessionIdToPhone[sessionId] ? "RUNNING" : "לא מחובר")
+        : "STOPPED",
     apiKey: apiKeys[sessionId] || "",
     webhook: webhooks[sessionId] || "",
     qrCode:
@@ -255,7 +257,6 @@ app.get("/qr/:sessionId", (req, res) => {
   }
 });
 
-// api endpoints for sessions
 // Middleware to check API key
 const checkApiKey = (req, res, next) => {
     const apiKey = req.headers['x-api-key'];
@@ -344,8 +345,6 @@ app.post('/sendimage/:sessionId', checkApiKey, async (req, res) => {
         res.status(500).send('Failed to send image');
     }
 });
-// end API endpoints for sessions
-
 
 // Serve the sessions management page
 app.get("/", (req, res) => {
