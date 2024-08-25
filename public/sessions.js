@@ -5,14 +5,11 @@ function loadSessions() {
             const tbody = document.getElementById('sessionsBody');
             tbody.innerHTML = '';
             sessions.forEach(session => {
-                const statusColor = session.status === "RUNNING" ? "green" : "red";
                 const row = `
                     <tr>
                         <td>${session.sessionId}</td>
-                        <td>${session.phone}</td> <!-- מציג את המספר -->
-                        <td style="color:${statusColor}">${session.status}</td> <!-- סטטוס בצבע המתאים -->
-                        <td>${session.apiKey}</td>
-                        <td>${session.webhook}</td>
+                        <td>${session.status}</td>
+                        <td>${session.apiKey || 'Not Available'}</td>
                         <td>
                             <button class="button" onclick="deleteSession('${session.sessionId}')">Delete</button>
                             <button class="button" onclick="reconnectSession('${session.sessionId}')">Reconnect</button>
@@ -33,7 +30,10 @@ function loadSessions() {
 function createNewSession() {
     const sessionId = prompt("Enter new session ID:");
     if (sessionId) {
-        fetch(`/genapi/${sessionId}`, { method: 'POST' })
+        fetch(`/genapi/${sessionId}`, { 
+            method: 'POST',
+            headers: { 'x-api-key': 'your_api_key' }
+        })
             .then(response => response.json())
             .then(data => {
                 alert(`New session created with API key: ${data.apiKey}`);
@@ -49,7 +49,10 @@ function createNewSession() {
 
 function deleteSession(sessionId) {
     if (confirm(`Are you sure you want to delete session ${sessionId}?`)) {
-        fetch(`/delapi/${sessionId}`, { method: 'DELETE' })
+        fetch(`/delapi/${sessionId}`, { 
+            method: 'DELETE',
+            headers: { 'x-api-key': 'your_api_key' }
+        })
             .then(response => {
                 if (response.ok) {
                     alert(`Session ${sessionId} deleted`);
@@ -68,7 +71,9 @@ function deleteSession(sessionId) {
 }
 
 function reconnectSession(sessionId) {
-    fetch(`/start/${sessionId}`)
+    fetch(`/start/${sessionId}`, { 
+        headers: { 'x-api-key': 'your_api_key' }
+    })
         .then(response => response.text())
         .then(result => {
             alert(result);
@@ -85,7 +90,10 @@ function updateWebhook(sessionId) {
     if (newWebhook) {
         fetch(`/set-webhook/${sessionId}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-api-key': 'your_api_key'
+            },
             body: JSON.stringify({ webhookUrl: newWebhook })
         })
         .then(response => response.text())
@@ -101,7 +109,9 @@ function updateWebhook(sessionId) {
 }
 
 function getQR(sessionId) {
-    fetch(`/qr/${sessionId}`)
+    fetch(`/qr/${sessionId}`, { 
+        headers: { 'x-api-key': 'your_api_key' }
+    })
         .then(response => {
             if (response.status === 202) {
                 alert('QR code not yet generated. Please wait a moment and try again.');

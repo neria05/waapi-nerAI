@@ -3,12 +3,14 @@ const {
   makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
+  makeInMemoryStore
 } = require("@whiskeysockets/baileys");
 const QRCode = require("qrcode");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+require('dotenv').config();
 
 const app = express();
 const port = 3000;
@@ -16,149 +18,157 @@ const port = 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-let sessions = {};
-let sessionIdToPhone = {}; // New map to store sessionId to phone number
-
-// Load API keys from a file (if it exists)
-const apiKeysFilePath = path.join(__dirname, "api_keys.json");
+let sessions = new Map();
 let apiKeys = {};
+let webhooks = {};
+
+// Load API keys from file if exists
+const apiKeysFilePath = path.join(__dirname, "api_keys.json");
 if (fs.existsSync(apiKeysFilePath)) {
   apiKeys = JSON.parse(fs.readFileSync(apiKeysFilePath, "utf-8"));
 }
-
 // Save API keys to a file
 const saveApiKeys = () => {
   fs.writeFileSync(apiKeysFilePath, JSON.stringify(apiKeys, null, 2));
 };
 
-// Load webhook URLs from a file (if it exists)
+// Load webhooks from file if exists
 const webhookFilePath = path.join(__dirname, "webhooks.json");
-let webhooks = {};
 if (fs.existsSync(webhookFilePath)) {
   webhooks = JSON.parse(fs.readFileSync(webhookFilePath, "utf-8"));
 }
-
 // Save webhook URLs to a file
 const saveWebhooks = () => {
   fs.writeFileSync(webhookFilePath, JSON.stringify(webhooks, null, 2));
 };
 
-// Function to initialize a socket connection for a given session ID
-const startSock = async (sessionId) => {
-    console.log(`Starting socket for session: ${sessionId}`);
-    const sessionFilePath = `./sessions/${sessionId}`;
-    const { state, saveCreds } = await useMultiFileAuthState(sessionFilePath);
+// Global authentication token
+const AUTH_TOKEN = process.env.AUTHENTICATION_GLOBAL_AUTH_TOKEN;
 
-    const sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: false
-    });
-
-    const messageCache = new Set();
-
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('connection.update', async (update) => {
-      console.log(`Connection update for session ${sessionId}:`, update);
-      const { connection, qr, lastDisconnect } = update;
-      if (connection === 'close') {
-          const shouldReconnect = (lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut);
-          console.log(`Connection closed for session ${sessionId}. Reconnecting: ${shouldReconnect}`);
-          if (shouldReconnect) {
-              startSock(sessionId);
-          }
-      } else if (connection === 'open') {
-          console.log(`Connection opened for session ${sessionId}`);
-          const userJid = sock.user.id;
-          const userPhone = userJid.split('@')[0]; // Extract phone number
-          sessionIdToPhone[sessionId] = userPhone;
-          const successMessage = `*המספר ${userPhone} חובר בהצלחה!*\nמזהה: ${sessionId}\nמפתח API: ${apiKeys[sessionId]} `;
-          await sock.sendMessage(userJid, { text: successMessage });
-      } else if (qr) {
-          console.log(`QR code generated for session ${sessionId}`);
-          const qrCodeUrl = await QRCode.toDataURL(qr);
-          sessions[sessionId].qrCodeUrl = qrCodeUrl;
-      }
-  });
-
-    sock.ev.on('messages.upsert', async (upsert) => {
-        console.log('Received new message:', upsert);
-        const message = upsert.messages[0];
-        const chatId = message.key.remoteJid;
-        const senderNumber = chatId.split('@')[0];
-        const messageId = message.key.id;
-        const messageContent = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-        const fromMe = message.key.fromMe;
-
-        // Determine message type
-        let type = 'unknown';
-        if (message.message?.conversation) type = 'text';
-        else if (message.message?.imageMessage) type = 'image';
-        else if (message.message?.documentMessage) type = 'document';
-        else if (message.message?.audioMessage) type = 'audio';
-        else if (message.message?.videoMessage) type = 'video';
-        else if (message.message?.stickerMessage) type = 'sticker';
-
-        // Check if this message has been processed recently
-        const cacheKey = `${chatId}:${messageId}`;
-        if (messageCache.has(cacheKey)) {
-            console.log('Message already processed, skipping');
-            return;
-        }
-
-        // Add message to cache
-        messageCache.add(cacheKey);
-
-        // Remove from cache after 1 minute to prevent memory leak
-        setTimeout(() => messageCache.delete(cacheKey), 60000);
-
-        const webhookUrl = webhooks[sessionId];
-        if (webhookUrl) {
-            try {
-                const webhookPayload = {
-                    sessionId,
-                    senderNumber,
-                    messageId,
-                    messageContent,
-                    timestamp: message.messageTimestamp,
-                    chatId,
-                    isGroup: chatId.endsWith('@g.us'),
-                    fromMe,
-                    type,
-                };
-
-                console.log('Sending webhook payload:', webhookPayload);
-
-                const response = await axios.post(webhookUrl, JSON.stringify(webhookPayload), {
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                // Send the webhook response back as a reply only if it's not from the bot itself
-                if (response.data && !fromMe) {
-                    const replyMessage = response.data;
-                    await sock.sendMessage(chatId, { text: replyMessage });
-                }
-            } catch (error) {
-                console.error('Error sending webhook:', error.response ? error.response.data : error.message);
-            }
-        } else {
-            console.log(`No webhook URL configured for session ${sessionId}`);
-        }
-    });
-
-    console.log(`Socket initialized for session ${sessionId}`);
-    sessions[sessionId] = { sock, qrCodeUrl: null };
+// Middleware for API key authentication
+const authenticate = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+  if (apiKey !== AUTH_TOKEN) {
+    return res.status(403).send('Forbidden: Invalid API key');
+  }
+  next();
 };
 
-// Function to restore sessions on startup
+// Directory for session storage
+const sessionsDir = (sessionId = '') => {
+  return path.join(__dirname, 'sessions', sessionId ? sessionId : '');
+};
+
+// Initialize socket connection for a session
+const startSock = async (sessionId) => {
+  console.log(`Starting socket for session: ${sessionId}`);
+  const logger = require('pino')({ level: 'silent' });
+  const store = makeInMemoryStore({ logger });
+  const sessionFilePath = sessionsDir(sessionId);
+  const { state, saveCreds } = await useMultiFileAuthState(sessionFilePath);
+
+  const sock = makeWASocket({
+    auth: state,
+    logger,
+    printQRInTerminal: false,
+    browser: ['Ubuntu', 'Chrome', '20.0.04'],
+  });
+
+  store.bind(sock.ev);
+
+  sessions.set(sessionId, { ...sock, store });
+
+  sock.ev.on('creds.update', saveCreds);
+
+  sock.ev.on('connection.update', async (update) => {
+    console.log(`Connection update for session ${sessionId}:`, update);
+    const { connection, qr, lastDisconnect } = update;
+    if (connection === 'close') {
+      const shouldReconnect = (lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut);
+      console.log(`Connection closed for session ${sessionId}. Reconnecting: ${shouldReconnect}`);
+      if (shouldReconnect) {
+        startSock(sessionId);
+      } else {
+        sessions.delete(sessionId);
+      }
+    } else if (connection === 'open') {
+      console.log(`Connection opened for session ${sessionId}`);
+      const userJid = sock.user.id;
+      const userPhone = userJid.split('@')[0]; 
+      const successMessage = `*המספר ${userPhone} חובר בהצלחה!*\nמזהה: ${sessionId}\nAPI: ${apiKeys[sessionId]}`;
+      await sock.sendMessage(userJid, { text: successMessage });
+    } else if (qr) {
+      console.log(`QR code generated for session ${sessionId}`);
+      const qrCodeUrl = await QRCode.toDataURL(qr);
+      sessions.get(sessionId).qrCodeUrl = qrCodeUrl;
+    }
+  });
+
+  // Handle incoming messages
+  sock.ev.on('messages.upsert', async (upsert) => {
+    console.log('Received new message:', upsert);
+    const message = upsert.messages[0];
+    if (!message.message) return;
+
+    const chatId = message.key.remoteJid;
+    const senderNumber = chatId.split('@')[0];
+    const messageId = message.key.id;
+    const messageContent = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
+    const fromMe = message.key.fromMe;
+
+    let type = 'unknown';
+    if (message.message?.conversation) type = 'text';
+    else if (message.message?.imageMessage) type = 'image';
+    else if (message.message?.documentMessage) type = 'document';
+    else if (message.message?.audioMessage) type = 'audio';
+    else if (message.message?.videoMessage) type = 'video';
+    else if (message.message?.stickerMessage) type = 'sticker';
+
+    const webhookUrl = webhooks[sessionId];
+    if (webhookUrl) {
+      try {
+        const webhookPayload = {
+          sessionId,
+          senderNumber,
+          messageId,
+          messageContent,
+          timestamp: message.messageTimestamp,
+          chatId,
+          isGroup: chatId.endsWith('@g.us'),
+          fromMe,
+          type,
+        };
+
+        console.log('Sending webhook payload:', webhookPayload);
+
+        const response = await axios.post(webhookUrl, JSON.stringify(webhookPayload), {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // Send the webhook response back as a reply only if it's not from the bot itself
+        if (response.data && !fromMe) {
+          const replyMessage = response.data;
+          await sock.sendMessage(chatId, { text: replyMessage });
+        }
+      } catch (error) {
+        console.error('Error sending webhook:', error.response ? error.response.data : error.message);
+      }
+    } else {
+      console.log(`No webhook URL configured for session ${sessionId}`);
+    }
+  });
+
+  console.log(`Socket initialized for session ${sessionId}`);
+};
+
+// Restore sessions on startup
 const restoreSessions = async () => {
   try {
-    const sessionsDir = "./sessions";
-    if (fs.existsSync(sessionsDir)) {
-      const sessionFiles = fs.readdirSync(sessionsDir);
-      for (const sessionId of sessionFiles) {
+    if (fs.existsSync(sessionsDir())) {
+      const sessionDirs = fs.readdirSync(sessionsDir());
+      for (const sessionId of sessionDirs) {
         console.log(`Attempting to restore session: ${sessionId}`);
         await startSock(sessionId);
       }
@@ -171,23 +181,37 @@ const restoreSessions = async () => {
 };
 
 restoreSessions();
+app.use(authenticate);
 
-// Endpoint to get all sessions
+// Middleware to check API key
+const checkApiKey = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+  const { sessionId } = req.params;
+
+  if (!apiKey) {
+    return res.status(403).send('API key is required');
+  }
+  if (!sessionId) {
+    return res.status(403).send('Session ID is required');
+  }
+  if (apiKeys[sessionId] !== apiKey) {
+    return res.status(403).send(`Invalid API key for session ${sessionId}`);
+  }
+
+  next();
+};
+
+// Define endpoints
 app.get("/sessions", (req, res) => {
-  const sessionList = Object.keys(sessions).map((sessionId) => ({
-    sessionId,
-    phone: sessionIdToPhone[sessionId] || "לא מחובר",
-    status:
-      sessions[sessionId] && sessions[sessionId].sock
-        ? (sessionIdToPhone[sessionId] ? "RUNNING" : "לא מחובר")
-        : "STOPPED",
-    apiKey: apiKeys[sessionId] || "",
-    webhook: webhooks[sessionId] || "",
-    qrCode:
-      sessions[sessionId] && sessions[sessionId].qrCodeUrl
-        ? sessions[sessionId].qrCodeUrl
-        : null,
-  }));
+  const sessionList = Array.from(sessions.keys()).map((sessionId) => {
+    const session = sessions.get(sessionId);
+    const status = session ? (session.sock?.ws?.socket?.readyState === 1 ? "RUNNING" : "STOPPED") : "STOPPED";
+    return {
+      sessionId,
+      status,
+      qrCode: session && session.qrCodeUrl ? session.qrCodeUrl : null,
+    };
+  });
   res.json(sessionList);
 });
 
@@ -200,6 +224,53 @@ app.get("/start/:sessionId", async (req, res) => {
   } catch (error) {
     console.error(`Error starting socket for session ${sessionId}`, error);
     res.status(500).send(`Failed to start socket for session ${sessionId}`);
+  }
+});
+
+app.post('/message/:sessionId', checkApiKey, async (req, res) => {
+  const { sessionId } = req.params;
+  const { id, text } = req.body;
+
+  if (!id || !text) {
+    return res.status(400).send('Missing id or text in request body');
+  }
+
+  const session = sessions.get(sessionId);
+  if (!session || !session.sock) {
+    return res.status(404).send(`Session ${sessionId} not found or not connected`);
+  }
+
+  try {
+    await session.sock.sendMessage(id, { text });
+    res.status(200).send('Message sent successfully');
+  } catch (error) {
+    console.error(`Error sending message for session ${sessionId}:`, error);
+    res.status(500).send('Failed to send message');
+  }
+});
+
+app.post('/sendimage/:sessionId', checkApiKey, async (req, res) => {
+  const { sessionId } = req.params;
+  const { id, url, caption } = req.body;
+
+  if (!id || !url) {
+    return res.status(400).send('Missing id or url in request body');
+  }
+
+  const session = sessions.get(sessionId);
+  if (!session || !session.sock) {
+    return res.status(404).send(`Session ${sessionId} not found or not connected`);
+  }
+
+  try {
+    await session.sock.sendMessage(id, {
+      image: { url: url },
+      caption: caption || ''
+    });
+    res.status(200).send('Image sent successfully');
+  } catch (error) {
+    console.error(`Error sending image for session ${sessionId}:`, error);
+    res.status(500).send('Failed to send image');
   }
 });
 
@@ -225,8 +296,7 @@ app.post("/genapi/:sessionId", async (req, res) => {
   apiKeys[sessionId] = apiKey;
   saveApiKeys();
 
-  // Initialize the session
-  if (!sessions[sessionId]) {
+  if (!sessions.has(sessionId)) {
     await startSock(sessionId);
   }
 
@@ -247,7 +317,7 @@ app.delete("/delapi/:sessionId", (req, res) => {
 // Endpoint to get QR code for a specific session
 app.get("/qr/:sessionId", (req, res) => {
   const { sessionId } = req.params;
-  const session = sessions[sessionId];
+  const session = sessions.get(sessionId);
   if (session && session.qrCodeUrl) {
     res.json({ qrCode: session.qrCodeUrl });
   } else if (session) {
@@ -259,107 +329,15 @@ app.get("/qr/:sessionId", (req, res) => {
   }
 });
 
-// Middleware to check API key
-const checkApiKey = (req, res, next) => {
-    const apiKey = req.headers['x-api-key'];
-    const { sessionId } = req.params;
-
-    if (!apiKey) {
-        return res.status(403).send('API key is required');
-    }
-    if (!sessionId) {
-        return res.status(403).send('Session ID is required');
-    }
-    if (apiKeys[sessionId] !== apiKey) {
-        return res.status(403).send(`Invalid API key for session ${sessionId}`);
-    }
-
-    next();
-};
-
-// Endpoint to send a message
-app.post('/message/:sessionId', checkApiKey, async (req, res) => {
-    const { sessionId } = req.params;
-    const { id, text } = req.body;
-
-    if (!id || !text) {
-        return res.status(400).send('Missing id or text in request body');
-    }
-
-    const session = sessions[sessionId];
-    if (!session || !session.sock) {
-        return res.status(404).send(`Session ${sessionId} not found or not connected`);
-    }
-
-    try {
-        await session.sock.sendMessage(id, { text });
-        res.status(200).send('Message sent successfully');
-    } catch (error) {
-        console.error(`Error sending message for session ${sessionId}:`, error);
-        res.status(500).send('Failed to send message');
-    }
-});
-
-// Endpoint to check if a number exists on WhatsApp
-app.get('/checkno/:sessionId/:phone', checkApiKey, async (req, res) => {
-    const { sessionId, phone } = req.params;
-
-    const session = sessions[sessionId];
-    if (!session || !session.sock) {
-        return res.status(404).send(`Session ${sessionId} not found or not connected`);
-    }
-
-    try {
-        const [result] = await session.sock.onWhatsApp(phone);
-        if (result.exists) {
-            res.status(200).json({ exists: true, jid: result.jid });
-        } else {
-            res.status(200).json({ exists: false });
-        }
-    } catch (error) {
-        console.error(`Error checking number for session ${sessionId}:`, error);
-        res.status(500).send('Failed to check number');
-    }
-});
-
-// Endpoint to send an image
-app.post('/sendimage/:sessionId', checkApiKey, async (req, res) => {
-    const { sessionId } = req.params;
-    const { id, url, caption } = req.body;
-
-    if (!id || !url) {
-        return res.status(400).send('Missing id or url in request body');
-    }
-
-    const session = sessions[sessionId];
-    if (!session || !session.sock) {
-        return res.status(404).send(`Session ${sessionId} not found or not connected`);
-    }
-
-    try {
-        await session.sock.sendMessage(id, { 
-            image: { url: url },
-            caption: caption || ''
-        });
-        res.status(200).send('Image sent successfully');
-    } catch (error) {
-        console.error(`Error sending image for session ${sessionId}:`, error);
-        res.status(500).send('Failed to send image');
-    }
-});
-
-// Serve the sessions management page
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "sessions.html"));
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send("Something broke!");
 });
 
-// Start the Express server
 app.listen(port, () => {
   console.log(`WhatsApp API server listening at http://localhost:${port}`);
 });
