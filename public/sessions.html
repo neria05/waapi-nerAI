@@ -15,6 +15,22 @@
             text-align: center;
             color: #333;
         }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            font-size: 16px;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        #loginContainer {
+            text-align: center;
+            margin-top: 50px;
+        }
+        #sessionsContainer {
+            display: none;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -35,10 +51,6 @@
         tr:hover {
             background-color: #ddd;
         }
-        .qr-code {
-            max-width: 200px;
-            max-height: 200px;
-        }
         .button {
             background-color: #4CAF50;
             color: white;
@@ -54,10 +66,6 @@
         }
         .button:hover {
             background-color: #45a049;
-        }
-        .error {
-            color: red;
-            font-weight: bold;
         }
         .api-doc {
             background-color: #fff;
@@ -76,59 +84,66 @@
 </head>
 <body>
     <h1>WhatsApp Sessions Management</h1>
-    <div id="errorMessage" class="error"></div>
-    <table id="sessionsTable">
-        <thead>
-            <tr>
-                <th>Session ID</th>
-                <th>Status</th>
-                <th>API Key</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody id="sessionsBody"></tbody>
-    </table>
-    <button class="button" onclick="createNewSession()">Create New Session</button>
+    <div id="loginContainer">
+        <h2>Login</h2>
+        <input type="password" id="apiKeyInput" placeholder="Enter API Key">
+        <button onclick="login()">Login</button>
+        <div id="loginError" class="error"></div>
+    </div>
 
-    <h2>API Documentation</h2>
-    <div class="api-doc">
-        <h3>Send a Message</h3>
-        <p><strong>Endpoint:</strong> <code>POST /message/:sessionId</code></p>
-        <p><strong>Headers:</strong></p>
-        <pre>{
+    <div id="sessionsContainer">
+        <table id="sessionsTable">
+            <thead>
+                <tr>
+                    <th>Session ID</th>
+                    <th>Status</th>
+                    <th>API Key</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="sessionsBody"></tbody>
+        </table>
+        <button class="button" onclick="createNewSession()">Create New Session</button>
+
+        <h2>API Documentation</h2>
+        <div class="api-doc">
+            <h3>Send a Message</h3>
+            <p><strong>Endpoint:</strong> <code>POST /message/:sessionId</code></p>
+            <p><strong>Headers:</strong></p>
+            <pre>{
     "x-api-key": "your_api_key"
 }</pre>
-        <p><strong>Body:</strong></p>
-        <pre>{
+            <p><strong>Body:</strong></p>
+            <pre>{
     "id": "recipient_id",
     "text": "message_text"
 }</pre>
 
-        <h3>Set Webhook URL</h3>
-        <p><strong>Endpoint:</strong> <code>POST /set-webhook/:sessionId</code></p>
-        <p><strong>Headers:</strong></p>
-        <pre>{
+            <h3>Set Webhook URL</h3>
+            <p><strong>Endpoint:</strong> <code>POST /set-webhook/:sessionId</code></p>
+            <p><strong>Headers:</strong></p>
+            <pre>{
     "x-api-key": "your_api_key"
 }</pre>
-        <p><strong>Body:</strong></p>
-        <pre>{
+            <p><strong>Body:</strong></p>
+            <pre>{
     "webhookUrl": "webhook_url"
 }</pre>
 
-        <h3>Generate New API Key</h3>
-        <p><strong>Endpoint:</strong> <code>POST /genapi/:sessionId</code></p>
-        <p><strong>Headers:</strong></p>
-        <pre>{
+            <h3>Generate New API Key</h3>
+            <p><strong>Endpoint:</strong> <code>POST /genapi/:sessionId</code></p>
+            <p><strong>Headers:</strong></p>
+            <pre>{
     "x-api-key": "your_api_key"
 }</pre>
 
-        <h3>Get QR Code</h3>
-        <p><strong>Endpoint:</strong> <code>GET /qr/:sessionId</code></p>
-        <p><strong>Headers:</strong></p>
-        <pre>{
+            <h3>Get QR Code</h3>
+            <p><strong>Endpoint:</strong> <code>GET /qr/:sessionId</code></p>
+            <p><strong>Headers:</strong></p>
+            <pre>{
     "x-api-key": "your_api_key"
 }</pre>
-
+        </div>
     </div>
 
     <script src="sessions.js"></script>
